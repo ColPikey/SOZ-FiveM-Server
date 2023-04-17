@@ -4,19 +4,29 @@ import { Once, OnceStep, OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
+import { Logger } from '../../core/logger';
 import { ServerEvent } from '../../shared/event';
+import { joaat } from '../../shared/joaat';
 import { JobPermission, JobType } from '../../shared/job';
 import { Monitor } from '../../shared/monitor';
 import { PlayerData } from '../../shared/player';
 import { toVector3Object, Vector3, Vector4 } from '../../shared/polyzone/vector';
 import { getRandomItem } from '../../shared/random';
 import { Err, isErr, Ok, Result } from '../../shared/result';
-import { RpcEvent } from '../../shared/rpc';
-import { Garage, GarageType, GarageVehicle, PlaceCapacity } from '../../shared/vehicle/garage';
+import { RpcServerEvent } from '../../shared/rpc';
+import {
+    Garage,
+    GarageCategory,
+    GarageType,
+    GarageVehicle,
+    HouseGarageLimits,
+    PlaceCapacity,
+} from '../../shared/vehicle/garage';
 import { getDefaultVehicleConfiguration } from '../../shared/vehicle/modification';
 import { PlayerVehicleState } from '../../shared/vehicle/player.vehicle';
 import { getDefaultVehicleCondition, VehicleCategory } from '../../shared/vehicle/vehicle';
 import { PrismaService } from '../database/prisma.service';
+import { InventoryManager } from '../inventory/inventory.manager';
 import { JobService } from '../job.service';
 import { LockService } from '../lock.service';
 import { Notifier } from '../notifier';
@@ -26,6 +36,12 @@ import { GarageRepository } from '../repository/garage.repository';
 import { VehicleRepository } from '../repository/vehicle.repository';
 import { VehicleSpawner } from './vehicle.spawner';
 import { VehicleStateService } from './vehicle.state.service';
+
+const ALLOWED_VEHICLE_TYPE: Record<GarageCategory, string[]> = {
+    [GarageCategory.Car]: ['automobile', 'bike', 'trailer'],
+    [GarageCategory.Air]: ['heli', 'plane'],
+    [GarageCategory.Sea]: ['boat', 'submarine'],
+};
 
 @Provider()
 export class VehicleGarageProvider {
@@ -59,32 +75,45 @@ export class VehicleGarageProvider {
     @Inject(VehicleRepository)
     private vehicleRepository: VehicleRepository;
 
+    @Inject(InventoryManager)
+    private inventoryManager: InventoryManager;
+
     @Inject(Monitor)
     private monitor: Monitor;
 
-    @Once(OnceStep.DatabaseConnected)
+    @Inject(Logger)
+    private logger: Logger;
+
+    @Once(OnceStep.RepositoriesLoaded)
     public async init(): Promise<void> {
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET state = 1, garage = 'airportpublic' WHERE state = 0 AND job IS NULL AND category = 'car'"
-        );
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET state = 3, garage = job WHERE state = 0 AND job IS NOT NULL AND category = 'car'"
-        );
+        const queries = `
+            UPDATE player_vehicles SET state = 1, garage = 'airportpublic' WHERE state = 0 AND job IS NULL AND category = 'car';
+            UPDATE player_vehicles SET state = 3, garage = job WHERE state = 0 AND job IS NOT NULL AND category = 'car';
+            UPDATE player_vehicles SET state = 1, garage = 'airport_air' WHERE state = 0 AND job IS NULL AND category = 'air';
+            UPDATE player_vehicles SET state = 3, garage = concat(job,'_air') WHERE state = 0 AND job IS NOT NULL AND category = 'air';
+            UPDATE player_vehicles SET garage = 'mtp' WHERE garage = 'oil';
+            UPDATE player_vehicles SET garage = 'stonk' WHERE garage = 'cash-transfer';
+            UPDATE player_vehicles SET garage = 'pound' WHERE state = 2 AND garage != 'pound';
 
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET state = 1, garage = 'airport_air' WHERE state = 0 AND job IS NULL AND category = 'air'"
-        );
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET state = 3, garage = concat(job,'_air') WHERE state = 0 AND job IS NOT NULL AND category = 'air'"
-        );
+            UPDATE vehicles v SET v.stock = 14 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Compacts';
+            UPDATE vehicles v SET v.stock = 10 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Coupes';
+            UPDATE vehicles v SET v.stock = 6 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Muscle';
+            UPDATE vehicles v SET v.stock = 6 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Suvs';
+            UPDATE vehicles v SET v.stock = 10 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Vans';
+            UPDATE vehicles v SET v.stock = 10 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Off-road';
+            UPDATE vehicles v SET v.stock = 14 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Sedans';
+            UPDATE vehicles v SET v.stock = 10 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Motorcycles';
+            UPDATE vehicles v SET v.stock = 3 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Helicopters';
+            UPDATE vehicles v SET v.stock = 99 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.category = 'Cycles';
+            UPDATE vehicles v SET v.stock = 2 - (SELECT COUNT(1) as taken FROM player_vehicles WHERE player_vehicles.vehicle = v.model AND player_vehicles.state != 5)  WHERE v.dealership_id = 'luxury';
+            UPDATE vehicles v SET v.stock = 0 WHERE v.stock < 0;
+        `
+            .split(';')
+            .filter(s => s.trim().length > 0);
 
-        await this.prismaService.$executeRawUnsafe("UPDATE player_vehicles SET garage = 'mtp' WHERE garage = 'oil'");
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET garage = 'stonk' WHERE garage = 'cash-transfer'"
-        );
-        await this.prismaService.$executeRawUnsafe(
-            "UPDATE player_vehicles SET garage = 'pound' WHERE state = 2 AND garage != 'pound'"
-        );
+        for (const query of queries) {
+            await this.prismaService.$executeRawUnsafe(query);
+        }
 
         const vehicles = await this.prismaService.playerVehicle.findMany({
             where: {
@@ -92,13 +121,13 @@ export class VehicleGarageProvider {
             },
         });
 
-        const garages = await this.garageRepository.refresh();
+        const garages = await this.garageRepository.get();
         const toPound = [];
         const toVoid = [];
 
         for (const vehicle of vehicles) {
             const parkingTime = new Date(vehicle.parkingtime * 1000);
-            const days = Math.floor((Date.now() / 1000 - parkingTime.getTime()) / (24 * 60 * 60));
+            const days = (Date.now() - parkingTime.getTime()) / (1000 * 60 * 60 * 24);
 
             let garageId = vehicle.garage;
 
@@ -116,7 +145,7 @@ export class VehicleGarageProvider {
                 toVoid.push(vehicle.id);
             } else if (garage && garage.type === GarageType.Depot && days > 7) {
                 toVoid.push(vehicle.id);
-            } else if (garage && garage.type !== GarageType.Job && days > 21) {
+            } else if ((!garage || garage.type !== GarageType.Job) && days > 21) {
                 toPound.push(vehicle.id);
             }
         }
@@ -145,12 +174,77 @@ export class VehicleGarageProvider {
                 },
             });
         }
+
+        const playerVehicles = await this.prismaService.playerVehicle.findMany();
+
+        for (const v of playerVehicles) {
+            const hash = joaat(v.vehicle.toLowerCase());
+            const currentHash = parseInt(v.hash, 10);
+
+            if (hash !== currentHash) {
+                await this.prismaService.playerVehicle.update({
+                    where: {
+                        id: v.id,
+                    },
+                    data: {
+                        hash: hash.toString(),
+                    },
+                });
+            }
+        }
+
+        const vehicleData = await this.prismaService.vehicle.findMany();
+
+        for (const v of vehicleData) {
+            const hash = joaat(v.model.toLowerCase());
+            const currentHash = v.hash;
+
+            if (hash !== currentHash) {
+                await this.prismaService.vehicle.update({
+                    where: {
+                        model: v.model,
+                    },
+                    data: {
+                        hash: hash,
+                    },
+                });
+            }
+        }
     }
 
-    @Rpc(RpcEvent.VEHICLE_GARAGE_GET_FREE_PLACES)
-    public async getFreePlaces(source: number, id: string, garage: Garage): Promise<number | null> {
-        if (garage.type !== GarageType.Private) {
+    @Rpc(RpcServerEvent.VEHICLE_GARAGE_GET_MAX_PLACES)
+    public async getMaxPlaces(source: number, garage: Garage): Promise<number | null> {
+        if (garage.type !== GarageType.Private && garage.type !== GarageType.House) {
             return null;
+        }
+
+        if (garage.type === GarageType.House && garage.isTrailerGarage) {
+            return 1;
+        }
+
+        if (garage.type === GarageType.House) {
+            const player = this.playerService.getPlayer(source);
+            if (!player || !player.apartment || !player.apartment.id) return 0;
+            const apartment = await this.prismaService.housing_apartment.findUnique({
+                where: { id: parseInt(player.apartment.id) },
+            });
+            if (!apartment) return 0;
+            const apartmentTier = apartment.tier ?? 0;
+            return HouseGarageLimits[apartmentTier] ?? 0;
+        }
+
+        return 38;
+    }
+
+    @Rpc(RpcServerEvent.VEHICLE_GARAGE_GET_FREE_PLACES)
+    public async getFreePlaces(source: number, id: string, garage: Garage): Promise<number | null> {
+        if (garage.type !== GarageType.Private && garage.type !== GarageType.House) {
+            return null;
+        }
+
+        const isPropertyGarage = garage.type === GarageType.House;
+        if (isPropertyGarage && !id.startsWith('property_')) {
+            id = `property_${id}`;
         }
 
         const ids = [id];
@@ -159,16 +253,32 @@ export class VehicleGarageProvider {
             ids.push(garage.legacyId);
         }
 
+        const player = this.playerService.getPlayer(source);
+        const citizenIds = [player.citizenid];
+        if (isPropertyGarage && player.apartment && player.apartment.id) {
+            const { owner, roommate } = (await this.prismaService.housing_apartment.findUnique({
+                where: { id: parseInt(player.apartment.id) },
+            })) ?? { owner: '', roommate: '' };
+            if (player.citizenid === owner && roommate) citizenIds.push(roommate);
+            if (player.citizenid === roommate && owner) citizenIds.push(owner);
+        }
+
         const count = await this.prismaService.playerVehicle.count({
             where: {
                 garage: { in: ids },
+                citizenid: isPropertyGarage ? { in: citizenIds } : undefined,
+                state: {
+                    in: [PlayerVehicleState.InGarage, PlayerVehicleState.InPound, PlayerVehicleState.InJobGarage],
+                },
             },
         });
 
-        return Math.max(0, 38 - count);
+        const maxPlaces = await this.getMaxPlaces(source, garage);
+
+        return Math.max(0, maxPlaces - count);
     }
 
-    @Rpc(RpcEvent.VEHICLE_GARAGE_GET_VEHICLES)
+    @Rpc(RpcServerEvent.VEHICLE_GARAGE_GET_VEHICLES)
     public async getGarageVehicles(source: number, id: string, garage: Garage): Promise<GarageVehicle[]> {
         const player = this.playerService.getPlayer(source);
 
@@ -373,6 +483,18 @@ export class VehicleGarageProvider {
             return;
         }
 
+        const vehicleType = GetVehicleType(vehicleEntityId);
+
+        if (!ALLOWED_VEHICLE_TYPE[garage.category].includes(vehicleType)) {
+            this.notifier.notify(
+                source,
+                `Vous ne pouvez pas ranger ce véhicule dans le garage ${garage.name}.`,
+                'error'
+            );
+
+            return;
+        }
+
         const vehicle = await this.checkCanManageVehicle(player, id, garage, vehicleState.id);
 
         if (isErr(vehicle)) {
@@ -393,7 +515,6 @@ export class VehicleGarageProvider {
 
         if (freePlaces !== null && freePlaces <= 0) {
             this.notifier.notify(source, 'Ce garage est plein.', 'error');
-
             return;
         }
 
@@ -434,10 +555,22 @@ export class VehicleGarageProvider {
     }
 
     @OnEvent(ServerEvent.VEHICLE_GARAGE_RETRIEVE)
-    public async takeOutVehicle(source: number, id: string, garage: Garage, vehicleId: number): Promise<void> {
+    public async takeOutVehicle(
+        source: number,
+        id: string,
+        garage: Garage,
+        vehicleId: number,
+        use_ticket: boolean
+    ): Promise<void> {
         const player = this.playerService.getPlayer(source);
 
         if (!player) {
+            return;
+        }
+
+        if (use_ticket && !this.inventoryManager.hasEnoughItem(source, 'parking_ticket_fake', 1, true)) {
+            this.notifier.notify(source, "Vous n'avez pas de ticket de parking.", 'error');
+
             return;
         }
 
@@ -523,13 +656,13 @@ export class VehicleGarageProvider {
                     price = Math.min(200, hours * 20);
                 }
 
-                if (price !== 0 && !this.playerMoneyService.remove(source, price)) {
+                if (!use_ticket && price !== 0 && !this.playerMoneyService.remove(source, price)) {
                     this.notifier.notify(source, "Vous n'avez pas assez d'argent.", 'error');
 
                     return;
                 }
 
-                if (price !== 0) {
+                if (!use_ticket && price !== 0) {
                     this.monitor.publish(
                         'pay_vehicle_garage_fee',
                         {
@@ -543,7 +676,7 @@ export class VehicleGarageProvider {
                     );
                 }
 
-                if (price !== 0 && garage.type === GarageType.Depot) {
+                if (!use_ticket && price !== 0 && garage.type === GarageType.Depot) {
                     const bennysFee = Math.round(vehicle.price * 0.02);
                     await this.playerMoneyService.transfer('farm_bennys', 'safe_bennys', bennysFee);
 
@@ -560,12 +693,12 @@ export class VehicleGarageProvider {
                     );
                 }
 
-                if (
-                    await this.vehicleSpawner.spawnPlayerVehicle(source, playerVehicle, [
-                        ...parkingPlace.center,
-                        parkingPlace.heading || 0,
-                    ] as Vector4)
-                ) {
+                const spawnedVehicleId = await this.vehicleSpawner.spawnPlayerVehicle(source, playerVehicle, [
+                    ...parkingPlace.center,
+                    parkingPlace.heading || 0,
+                ] as Vector4);
+
+                if (spawnedVehicleId !== null) {
                     await this.prismaService.playerVehicle.update({
                         where: { id: playerVehicle.id },
                         data: {
@@ -591,6 +724,10 @@ export class VehicleGarageProvider {
                     );
 
                     this.notifier.notify(source, 'Vous avez sorti votre véhicule.', 'success');
+
+                    if (use_ticket) {
+                        this.inventoryManager.removeItemFromInventory(source, 'parking_ticket_fake', 1);
+                    }
                 } else {
                     this.notifier.notify(
                         source,
@@ -625,7 +762,7 @@ export class VehicleGarageProvider {
 
                 if (appartements.length == 0) {
                     citizenIds.add(player.citizenid);
-                    console.error('no appartements found for property', propertyId);
+                    this.logger.error('no appartements found for property', propertyId);
                 }
 
                 for (const appartement of appartements) {
@@ -636,7 +773,7 @@ export class VehicleGarageProvider {
                     }
                 }
             } else {
-                console.error('property not found', propertyId);
+                this.logger.error('property not found', propertyId);
 
                 citizenIds.add(player.citizenid);
             }

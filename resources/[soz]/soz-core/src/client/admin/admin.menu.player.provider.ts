@@ -5,7 +5,7 @@ import { emitRpc } from '../../core/rpc';
 import { AdminPlayer, HEALTH_OPTIONS, MOVEMENT_OPTIONS, VOCAL_OPTIONS } from '../../shared/admin/admin';
 import { ClientEvent, NuiEvent, ServerEvent } from '../../shared/event';
 import { Err, Ok } from '../../shared/result';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { Notifier } from '../notifier';
 import { InputService } from '../nui/input.service';
 import { NuiDispatch } from '../nui/nui.dispatch';
@@ -26,7 +26,9 @@ export class AdminMenuPlayerProvider {
     private inputService: InputService;
 
     private async getPlayers(): Promise<AdminPlayer[]> {
-        return (await emitRpc<AdminPlayer[]>(RpcEvent.ADMIN_GET_PLAYERS)).sort((a, b) => a.name.localeCompare(b.name));
+        return (await emitRpc<AdminPlayer[]>(RpcServerEvent.ADMIN_GET_PLAYERS)).sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
     }
 
     @OnNuiEvent(NuiEvent.AdminGetPlayers)
@@ -96,7 +98,7 @@ export class AdminMenuPlayerProvider {
             return;
         }
         if (action === 'status') {
-            const isMuted = await emitRpc<boolean>(RpcEvent.VOIP_IS_MUTED, player.id);
+            const isMuted = await emitRpc<boolean>(RpcServerEvent.VOIP_IS_MUTED, player.id);
 
             if (isMuted) {
                 this.notifier.notify(`Le joueur est ~r~muté.`, 'info');
@@ -131,7 +133,7 @@ export class AdminMenuPlayerProvider {
 
     @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleDiseaseOption)
     public async handleDiseaseOption({ action, player }: { action: string; player: AdminPlayer }): Promise<void> {
-        TriggerServerEvent(`admin:server:disease:${action}`, player.id);
+        TriggerServerEvent('admin:server:disease', player.id, action);
         this.notifier.notify(`La maladie ~g~${action}~s~ a été appliquée sur le joueur ~g~${player.name}~s~.`, 'info');
     }
 
@@ -193,5 +195,38 @@ export class AdminMenuPlayerProvider {
                 this.notifier.notify(`Les attributs du joueur ~g~${player.name}~s~ ont été modifiés.`, 'info');
                 break;
         }
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleInjuriesUpdate)
+    public async updateInjuriesCount({ player, value }: { player: AdminPlayer; value: number }): Promise<void> {
+        TriggerServerEvent(ServerEvent.ADMIN_SET_INJURIES_COUNT, player.id, value);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminMenuPlayerHandleSetReputation)
+    public async handleGiveReputation(player: AdminPlayer): Promise<void> {
+        const current = await emitRpc<number>(RpcServerEvent.ADMIN_GET_REPUTATION, player.id);
+        const value = await this.inputService.askInput(
+            {
+                title: `Changer la Réputation (actuelle ${current})`,
+                defaultValue: '',
+                maxCharacters: 7,
+            },
+            value => {
+                if (!value) {
+                    return Ok(true);
+                }
+                const int = parseInt(value);
+                if (isNaN(int) || int < 0) {
+                    return Err('Valeur incorrecte');
+                }
+                return Ok(true);
+            }
+        );
+
+        if (!value) {
+            return;
+        }
+
+        TriggerServerEvent(ServerEvent.ADMIN_SET_REPUTATION, player.id, value);
     }
 }

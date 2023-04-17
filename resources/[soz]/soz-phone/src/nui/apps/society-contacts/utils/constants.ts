@@ -91,4 +91,16 @@ export const SocietyContactsState: Society[] = [
         number: '555-FFS',
         avatar: 'media/society_icon/ffs.webp',
     },
+    {
+        id: 16,
+        display: 'Mandatory',
+        number: '555-MDR',
+        avatar: 'media/society_icon/mdr.webp',
+    },
+    {
+        id: 17,
+        display: "Force de l'ordre",
+        number: '555-POLICE',
+        avatar: 'media/society_icon/fdo.webp',
+    },
 ];

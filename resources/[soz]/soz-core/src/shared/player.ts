@@ -10,17 +10,19 @@ import { Halloween2022 } from './story/halloween2022';
 export type QBCorePlayer = {
     Functions: {
         SetMetaData: (key: string, val: any) => void;
-        Save: () => void;
+        SetMetaDatas: (data: Record<string, any>) => void;
         UpdateMaxWeight: () => void;
         AddMoney: (type: 'money' | 'marked_money', amount: number) => boolean;
         RemoveMoney: (type: 'money' | 'marked_money', amount: number) => boolean;
         SetClothConfig: (config: ClothConfig, skipApply: boolean) => void;
         GetMoney: (type: 'money' | 'marked_money') => number;
+        SetJobDuty: (onDuty: boolean) => void;
     };
     PlayerData: PlayerData;
 };
 
 export type PlayerData = {
+    apartment: any;
     citizenid: string;
     license: string;
     name: string;
@@ -95,7 +97,7 @@ export type PlayerServerState = {
 export enum PlayerLicenceType {
     Car = 'car',
     Truck = 'truck',
-    Moto = 'moto',
+    Moto = 'motorcycle',
     Boat = 'boat',
     Heli = 'heli',
     Weapon = 'weapon',
@@ -108,6 +110,12 @@ export enum PlayerCriminalState {
     None,
     Allowed,
 }
+
+export type PlayerInsideState = {
+    apartment: number | false;
+    property: number | null;
+    exitCoord: { x: number; y: number; z: number } | false;
+};
 
 export type PlayerMetadata = PlayerHealthBook & {
     godmode: boolean;
@@ -142,7 +150,13 @@ export type PlayerMetadata = PlayerHealthBook & {
     licences: Partial<Record<PlayerLicenceType, number>>;
     shortcuts: Record<number, Partial<InventoryItem>>;
     mort: string | null;
+    missive_count: number;
     criminal_state: PlayerCriminalState;
     criminal_reputation: number;
     criminal_talents: Talent[];
+    vehiclelimit: number;
+    inside: PlayerInsideState;
+    injuries_count: number;
+    injuries_date: number;
+    itt: boolean;
 };

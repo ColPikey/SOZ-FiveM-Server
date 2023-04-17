@@ -2,8 +2,9 @@ import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
 import { AdminPlayer, FullAdminPlayer } from '../../shared/admin/admin';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { PermissionService } from '../permission.service';
+import { PlayerService } from '../player/player.service';
 import { QBCore } from '../qbcore';
 import { ServerStateService } from '../server.state.service';
 
@@ -12,13 +13,16 @@ export class AdminMenuInteractiveProvider {
     @Inject(PermissionService)
     private permissionService: PermissionService;
 
+    @Inject(PlayerService)
+    private playerService: PlayerService;
+
     @Inject(ServerStateService)
     private serverStateService: ServerStateService;
 
     @Inject(QBCore)
     private QBCore: QBCore;
 
-    @Rpc(RpcEvent.ADMIN_GET_PLAYERS)
+    @Rpc(RpcServerEvent.ADMIN_GET_PLAYERS)
     public getPlayers(source: number): AdminPlayer[] {
         if (!this.permissionService.isHelper(source)) {
             return [];
@@ -32,12 +36,13 @@ export class AdminMenuInteractiveProvider {
                 license: playerData.license,
                 name: playerData.name,
                 rpFullName: `${playerData.charinfo.firstname} ${playerData.charinfo.lastname}`,
+                injuries: playerData.metadata.injuries_count,
             });
         }
         return players;
     }
 
-    @Rpc(RpcEvent.ADMIN_GET_FULL_PLAYERS)
+    @Rpc(RpcServerEvent.ADMIN_GET_FULL_PLAYERS)
     public getFullPlayers(source: number): FullAdminPlayer[] {
         if (!this.permissionService.isHelper(source)) {
             return [];
@@ -57,6 +62,7 @@ export class AdminMenuInteractiveProvider {
                 cid: name,
                 citizenId: playerData.citizenid,
                 ped: ped,
+                injuries: playerData.metadata.injuries_count,
             });
         }
         return players;

@@ -268,7 +268,7 @@ const MenuItemContainer: FunctionComponent<MenuItemProps> = ({
                 ref.current.scrollIntoView();
             }
         }
-    }, [isSelected, ref]);
+    }, [isSelected, ref, description]);
 
     useEnter(() => {
         if (!isSelected) {
@@ -556,6 +556,8 @@ type MenuItemSelectProps = PropsWithChildren<{
     initialValue?: any;
     titleWidth?: number;
     description?: string;
+    useGrid?: boolean;
+    alignRight?: boolean;
     equalityFn?: (a: any, b: any) => boolean;
 }>;
 
@@ -573,6 +575,8 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
     initialValue,
     titleWidth = 40,
     description = null,
+    useGrid = false,
+    alignRight = false,
     equalityFn = (a, b) => a === b,
 }) => {
     const [descendants, setDescendants] = useDescendantsInit();
@@ -585,13 +589,14 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
     }, [activeOptionIndex, onConfirm, activeValue]);
 
     const classNameContainer = cn('flex items-center', {
-        'justify-between': !showAllOptions,
+        'justify-between': !showAllOptions || useGrid,
     });
 
     const classNameTitle = cn('pr-2 truncate');
 
     const classNameList = cn({
-        'ml-4': showAllOptions,
+        'ml-4': showAllOptions && !alignRight,
+        'ml-auto': alignRight,
     });
 
     const itemSetDescription = useCallback(
@@ -647,7 +652,11 @@ export const MenuItemSelect: FunctionComponent<MenuItemSelectProps> = ({
                                 }}
                             >
                                 <MenuSelectControls onChange={onChange} initialValue={initialValue}>
-                                    <ul className="flex">{children}</ul>
+                                    {useGrid ? (
+                                        <ul className="grid grid-cols-5 gap-2">{children}</ul>
+                                    ) : (
+                                        <ul className="flex">{children}</ul>
+                                    )}
                                 </MenuSelectControls>
                             </div>
                         </div>
@@ -752,6 +761,7 @@ const useSelectOption = (
     helper?: ReactNode,
     helperRef?: any
 ): [(value) => void, boolean, boolean, (value) => void, boolean] => {
+    const isItemSelected = useContext(MenuSelectedContext);
     const { activeOptionIndex, distance, setDescription, setActiveOptionIndex, showAllOptions, activeValue } =
         useContext(MenuItemSelectContext);
     const ref = useRef(null);
@@ -781,7 +791,7 @@ const useSelectOption = (
     }, [setActiveOptionIndex, index]);
 
     useEffect(() => {
-        if (isSelected) {
+        if (isItemSelected && isSelected) {
             onSelected && onSelected();
             setDescription(description);
         }
@@ -795,6 +805,8 @@ type MenuItemSelectOptionProps = PropsWithChildren<{
     value?: any;
     description?: string;
     helper?: ReactNode;
+    useGrid?: boolean;
+    highlight?: boolean;
 }>;
 
 export const MenuItemSelectOption: FunctionComponent<MenuItemSelectOptionProps> = ({
@@ -825,6 +837,8 @@ export const MenuItemSelectOptionBox: FunctionComponent<MenuItemSelectOptionProp
     value = null,
     description = null,
     helper = null,
+    useGrid = false,
+    highlight = false,
 }) => {
     const [handleRefSet, show, selected, onClick, isInitialValue] = useSelectOption(
         value,
@@ -836,12 +850,16 @@ export const MenuItemSelectOptionBox: FunctionComponent<MenuItemSelectOptionProp
     return (
         <li
             ref={handleRefSet}
-            className={cn('border-2 rounded-sm p-2 truncate mr-2', {
+            className={cn('border-2 rounded-sm p-2 truncate', {
+                'mr-2': !useGrid,
                 hidden: !show,
                 'border-white': selected,
-                'border-white/20': !selected,
+                'border-white/20': !highlight && !selected,
+                'border-green-400': !selected && highlight,
                 'text-white': isInitialValue,
                 'text-white/50': !isInitialValue,
+                'text-green-400': !isInitialValue && highlight,
+                'grid place-content-center': useGrid,
             })}
             onClick={onClick}
         >

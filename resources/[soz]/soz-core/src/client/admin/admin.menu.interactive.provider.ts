@@ -4,9 +4,10 @@ import { Provider } from '../../core/decorators/provider';
 import { emitRpc } from '../../core/rpc';
 import { AdminPlayer, FullAdminPlayer } from '../../shared/admin/admin';
 import { NuiEvent } from '../../shared/event';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { DrawService } from '../draw.service';
 import { Qbcore } from '../qbcore';
+import { VehicleService } from '../vehicle/vehicle.service';
 
 @Provider()
 export class AdminMenuInteractiveProvider {
@@ -15,6 +16,9 @@ export class AdminMenuInteractiveProvider {
 
     @Inject(Qbcore)
     private QBCore: Qbcore;
+
+    @Inject(VehicleService)
+    private vehicleService: VehicleService;
 
     public intervalHandlers = {
         displayOwners: null,
@@ -35,9 +39,9 @@ export class AdminMenuInteractiveProvider {
         }
         this.intervalHandlers.displayOwners = setInterval(async () => {
             const vehicles: number[] = GetGamePool('CVehicle');
+            const playerCoords = GetEntityCoords(PlayerPedId(), false);
             for (const vehicle of vehicles) {
                 const vehicleCoords = GetEntityCoords(vehicle, false);
-                const playerCoords = GetEntityCoords(PlayerPedId(), false);
                 const dist = GetDistanceBetweenCoords(
                     vehicleCoords[0],
                     vehicleCoords[1],
@@ -47,6 +51,9 @@ export class AdminMenuInteractiveProvider {
                     playerCoords[2],
                     false
                 );
+
+                const state = this.vehicleService.getVehicleState(vehicle);
+
                 if (dist < 50) {
                     let text = ' | OwnerNet: ';
                     if (GetPlayerServerId(NetworkGetEntityOwner(vehicle)) === GetPlayerServerId(PlayerId())) {
@@ -55,7 +62,8 @@ export class AdminMenuInteractiveProvider {
                     const ownerInfo =
                         `${GetDisplayNameFromVehicleModel(GetEntityModel(vehicle))} ` +
                         `| VehicleNet: ${NetworkGetNetworkIdFromEntity(vehicle)} ` +
-                        `${text} ${GetPlayerServerId(NetworkGetEntityOwner(vehicle))}`;
+                        `${text} ${GetPlayerServerId(NetworkGetEntityOwner(vehicle))}` +
+                        `~w~| Open: ${state.open} | Forced: ${state.forced} `;
                     const vehicleInfo =
                         `Veh Engine.: ${GetVehicleEngineHealth(vehicle).toFixed(2)} ` +
                         `| Veh Body: ${GetVehicleBodyHealth(vehicle).toFixed(2)}` +
@@ -70,6 +78,33 @@ export class AdminMenuInteractiveProvider {
                         [vehicleCoords[0], vehicleCoords[1], vehicleCoords[2] + 2],
                         vehicleInfo
                     );
+                }
+            }
+
+            const peds: number[] = GetGamePool('CPed');
+            for (const ped of peds) {
+                if (IsPedInAnyVehicle(ped, false) || !NetworkGetEntityIsNetworked(ped)) {
+                    continue;
+                }
+                const pedCoords = GetEntityCoords(ped, false);
+                const dist = GetDistanceBetweenCoords(
+                    pedCoords[0],
+                    pedCoords[1],
+                    pedCoords[2],
+                    playerCoords[0],
+                    playerCoords[1],
+                    playerCoords[2],
+                    false
+                );
+                if (dist < 50) {
+                    let text = ' | OwnerNet: ';
+                    if (GetPlayerServerId(NetworkGetEntityOwner(ped)) === GetPlayerServerId(PlayerId())) {
+                        text = ` | ~g~OwnerNet: `;
+                    }
+                    const ownerInfo =
+                        `PedNet: ${NetworkGetNetworkIdFromEntity(ped)} ` +
+                        `${text} ${GetPlayerServerId(NetworkGetEntityOwner(ped))}`;
+                    this.drawService.drawText3d([pedCoords[0], pedCoords[1], pedCoords[2] + 1], ownerInfo);
                 }
             }
         }, 1);
@@ -101,22 +136,26 @@ export class AdminMenuInteractiveProvider {
     @OnNuiEvent(NuiEvent.AdminToggleDisplayPlayersOnMap)
     public async toggleDisplayPlayersOnMap(value: boolean): Promise<void> {
         if (!value) {
-            for (const value of Object.values(this.playerBlips)) {
-                RemoveBlip(value);
-            }
+            this.playerBlips.forEach((BlipValue, BlipKey) => {
+                this.QBCore.removeBlip('admin:player-blip:' + BlipKey);
+                this.playerBlips.delete(BlipKey);
+            });
+
             clearInterval(this.intervalHandlers.displayPlayersOnMap);
             return;
         }
-        this.intervalHandlers.displayPlayersOnMap = setInterval(async () => {
-            for (const value of Object.values(this.playerBlips)) {
-                RemoveBlip(value);
-            }
 
-            const players = await emitRpc<FullAdminPlayer[]>(RpcEvent.ADMIN_GET_FULL_PLAYERS);
+        this.intervalHandlers.displayPlayersOnMap = setInterval(async () => {
+            const players = await emitRpc<FullAdminPlayer[]>(RpcServerEvent.ADMIN_GET_FULL_PLAYERS);
+            this.playerBlips.forEach((BlipValue, BlipKey) => {
+                if (!players.some(player => player.citizenId === BlipKey)) {
+                    this.QBCore.removeBlip('admin:player-blip:' + BlipKey);
+                    this.playerBlips.delete(BlipKey);
+                }
+            });
 
             for (const player of players) {
                 const blipId = this.playerBlips.get(player.citizenId);
-
                 const coords = player.coords;
                 if (DoesBlipExist(blipId)) {
                     SetBlipCoords(blipId, coords[0], coords[1], coords[2]);
@@ -134,7 +173,6 @@ export class AdminMenuInteractiveProvider {
                     this.playerBlips.set(player.citizenId, createdBlip);
                 }
             }
-            this.previousPlayers = players.map(player => player.citizenId);
         }, 2500);
     }
 
@@ -144,7 +182,7 @@ export class AdminMenuInteractiveProvider {
             this.multiplayerTags.delete(value);
         }
 
-        const players = await emitRpc<AdminPlayer[]>(RpcEvent.ADMIN_GET_PLAYERS);
+        const players = await emitRpc<AdminPlayer[]>(RpcServerEvent.ADMIN_GET_PLAYERS);
 
         players.forEach(player => {
             this.multiplayerTags.set(player.citizenId, GetPlayerFromServerId(player.id));

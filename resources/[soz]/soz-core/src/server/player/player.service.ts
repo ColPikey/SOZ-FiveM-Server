@@ -35,10 +35,6 @@ export class PlayerService {
         return player.PlayerData;
     }
 
-    public getPlayersSources(): number[] | null {
-        return this.QBCore.getPlayersSources();
-    }
-
     public getPlayerJobAndGrade(source: number): [string, number] | null {
         const player = this.QBCore.getPlayer(source);
 
@@ -58,6 +54,18 @@ export class PlayerService {
 
         if (player) {
             player.Functions.SetMetaData(key, value);
+        }
+    }
+
+    public setPlayerMetaDatas(source: number, datas: Partial<PlayerMetadata>) {
+        const player = this.QBCore.getPlayer(source);
+
+        if (player) {
+            player.Functions.SetMetaDatas(datas);
+
+            if (datas.strength) {
+                player.Functions.UpdateMaxWeight();
+            }
         }
     }
 
@@ -97,20 +105,35 @@ export class PlayerService {
             return false;
         }
 
-        player.Functions.SetMetaData('disease', disease);
-        player.Functions.SetMetaData('last_disease_at', Date.now());
+        player.Functions.SetMetaDatas({
+            last_disease_at: Date.now(),
+            disease: disease,
+        });
 
         TriggerClientEvent(ClientEvent.LSMC_DISEASE_APPLY_CURRENT_EFFECT, player.PlayerData.source, disease);
 
         return disease;
     }
 
-    public save(source: number): void {
-        const player = this.QBCore.getPlayer(source);
+    public getIncrementedMetadata<K extends keyof PlayerMetadata>(
+        player: PlayerData,
+        key: K,
+        value: number,
+        min: number,
+        max?: number
+    ): number {
+        const currentValue = player.metadata[key] as number;
+        let newValue = currentValue + value;
 
-        if (player) {
-            player.Functions.Save();
+        if (newValue < min) {
+            newValue = min;
         }
+
+        if (max && newValue > max) {
+            newValue = max;
+        }
+
+        return newValue;
     }
 
     public incrementMetadata<K extends keyof PlayerMetadata>(
@@ -123,16 +146,7 @@ export class PlayerService {
         const player = this.QBCore.getPlayer(source);
 
         if (player) {
-            const currentValue = player.PlayerData.metadata[key] as number;
-            let newValue = currentValue + value;
-
-            if (newValue < min) {
-                newValue = min;
-            }
-
-            if (max && newValue > max) {
-                newValue = max;
-            }
+            const newValue = this.getIncrementedMetadata(player.PlayerData, key, value, min, max);
 
             player.Functions.SetMetaData(key, newValue);
 
@@ -140,5 +154,19 @@ export class PlayerService {
         }
 
         return null;
+    }
+
+    public setJobDuty(source: number, onDuty: boolean): PlayerData | null {
+        const player = this.QBCore.getPlayer(source);
+
+        if (!player) {
+            return null;
+        }
+
+        player.Functions.SetJobDuty(onDuty);
+    }
+
+    public getSteamIdentifier(source: number): string {
+        return this.QBCore.getSteamIdentifier(source);
     }
 }

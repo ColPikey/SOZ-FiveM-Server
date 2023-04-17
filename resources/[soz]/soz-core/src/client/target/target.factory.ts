@@ -1,3 +1,5 @@
+import { JobType } from '@public/shared/job';
+
 import { Inject, Injectable } from '../../core/decorators/injectable';
 import { Zone } from '../../shared/polyzone/box.zone';
 import { PedFactory } from '../factory/ped.factory';
@@ -10,9 +12,9 @@ export type TargetOptions = {
     event?: string;
     blackoutGlobal?: boolean;
     blackoutJob?: string;
-    canInteract?: (entity) => boolean;
+    canInteract?: (entity) => boolean | Promise<boolean>;
     action?: (entity) => void;
-    job?: string;
+    job?: string | JobType | Partial<{ [key in JobType]: number }>;
     license?: string;
     item?: string;
 };
@@ -21,10 +23,13 @@ export type PedOptions = {
     spawnNow?: boolean;
     model: string;
     coords: { x: number; y: number; z: number; w: number };
+    length?: number;
+    width?: number;
     minusOne?: boolean;
     freeze?: boolean;
     invincible?: boolean;
     blockevents?: boolean;
+    debugPoly?: boolean;
     scenario?: string;
     animDict?: string;
     anim?: string;
@@ -45,7 +50,7 @@ export class TargetFactory {
     @Inject(PedFactory)
     private pedFactory: PedFactory;
 
-    public createForBoxZone(id: string, zone: Zone, targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
+    public createForBoxZone(id: string, zone: Zone<any>, targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
         zone = {
             length: 1,
             width: 1,
@@ -92,7 +97,7 @@ export class TargetFactory {
             exports['qb-target'].RemoveZone(id);
         }
 
-        exports['qb-target'].DeletePeds();
+        //exports['qb-target'].DeletePeds();
     }
 
     public async createForPed(ped: PedOptions) {
@@ -103,10 +108,11 @@ export class TargetFactory {
             {
                 center: [ped.coords.x, ped.coords.y, ped.coords.z],
                 heading: ped.coords.w,
-                width: 0.8,
-                length: 0.8,
+                width: ped.width || 0.8,
+                length: ped.length || 0.8,
                 minZ: ped.coords.z - 1,
                 maxZ: ped.coords.z + 2,
+                debugPoly: ped.debugPoly,
             },
             ped.target.options
         );
@@ -125,6 +131,13 @@ export class TargetFactory {
 
     public createForAllVehicle(targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
         exports['qb-target'].AddGlobalVehicle({
+            options: targets,
+            distance: distance,
+        });
+    }
+
+    public createForAllPed(targets: TargetOptions[], distance = DEFAULT_DISTANCE) {
+        exports['qb-target'].AddGlobalPed({
             options: targets,
             distance: distance,
         });

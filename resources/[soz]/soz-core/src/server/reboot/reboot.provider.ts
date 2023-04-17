@@ -2,10 +2,12 @@ import { Command } from '../../core/decorators/command';
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
+import { Logger } from '../../core/logger';
 import { uuidv4, wait } from '../../core/utils';
 import { ClientEvent, ServerEvent } from '../../shared/event';
 import { Feature, isFeatureEnabled } from '../../shared/features';
 import { PrismaService } from '../database/prisma.service';
+import { PlayerCleanService } from '../player/player.clean.service';
 import { QBCore } from '../qbcore';
 import { VehicleDealershipProvider } from '../vehicle/vehicle.dealership.provider';
 import { WeatherProvider } from '../weather/weather.provider';
@@ -25,6 +27,12 @@ export class RebootProvider {
 
     @Inject(VehicleDealershipProvider)
     private vehicleDealershipProvider: VehicleDealershipProvider;
+
+    @Inject(PlayerCleanService)
+    private playerCleanService: PlayerCleanService;
+
+    @Inject(Logger)
+    private logger: Logger;
 
     @OnEvent(ServerEvent.FIVEM_PLAYER_CONNECTING)
     public onPlayerConnecting(source, name, setKickReason, deferrals) {
@@ -86,6 +94,13 @@ export class RebootProvider {
         exports['soz-bank'].saveAccounts();
         exports['soz-upw'].saveUpw();
         exports['soz-inventory'].saveInventories();
+        exports['soz-inventory'].stopSyncInventories();
+
+        const ids = await this.playerCleanService.getPlayerToCleans();
+        const [houseOwnerCount, houseRoommateCount] = await this.playerCleanService.cleanPlayerHouses(ids);
+
+        this.logger.info(`[reboot] Houses owner cleaned: ${houseOwnerCount}`);
+        this.logger.info(`[reboot] Houses roommate cleaned: ${houseRoommateCount}`);
     }
 
     @Command('thunder', {
@@ -163,7 +178,7 @@ export class RebootProvider {
             `${ClientEvent.PHONE_APP_NEWS_CREATE_BROADCAST}:${uuidv4()}`,
             {
                 type: `reboot_${minutes}`,
-                message: `Un ouragan arrive à toute allure ! Il devrait frapper la coeur de San Andreas d'ici ${minutes} minutes. Veillez ranger vos véhicules et vous abriter ! Votre sécurité est primordiale.`,
+                message: `Un ouragan arrive à toute allure ! Il devrait frapper le coeur de San Andreas d'ici ${minutes} minutes. Veuillez ranger vos véhicules et vous abriter ! Votre sécurité est primordiale.`,
                 reporter: 'San Andreas Météo',
             }
         );

@@ -1,14 +1,12 @@
-import { Qbcore } from '../../client/qbcore';
-import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
 import { Rpc } from '../../core/decorators/rpc';
-import { ServerEvent } from '../../shared/event';
 import { Job } from '../../shared/job';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { PrismaService } from '../database/prisma.service';
 import { InventoryManager } from '../inventory/inventory.manager';
 import { ItemService } from '../item/item.service';
+import { JobService } from '../job.service';
 import { Notifier } from '../notifier';
 import { PlayerMoneyService } from '../player/player.money.service';
 import { PlayerService } from '../player/player.service';
@@ -18,8 +16,8 @@ export class JobProvider {
     @Inject(PrismaService)
     private prismaService: PrismaService;
 
-    @Inject(Qbcore)
-    private QBCore: Qbcore;
+    @Inject(JobService)
+    private jobService: JobService;
 
     @Inject(ItemService)
     private itemService: ItemService;
@@ -36,9 +34,9 @@ export class JobProvider {
     @Inject(Notifier)
     private notifier: Notifier;
 
-    @Rpc(RpcEvent.JOB_GET_JOBS)
+    @Rpc(RpcServerEvent.JOB_GET_JOBS)
     public async getJobs(): Promise<Job[]> {
-        const jobs = this.QBCore.getJobs();
+        const jobs = this.jobService.getJobs();
 
         const grades = await this.prismaService.job_grades.findMany({
             orderBy: {
@@ -46,12 +44,12 @@ export class JobProvider {
             },
         });
 
-        for (const job of jobs) {
+        for (const job of Object.values(jobs)) {
             job.grades = [];
         }
 
         for (const grade of grades) {
-            const job = jobs.find(job => job.id === grade.jobId);
+            const job = jobs[grade.jobId];
 
             if (job) {
                 job.grades.push({
@@ -64,14 +62,15 @@ export class JobProvider {
                     permissions: JSON.parse(grade.permissions),
                     weight: grade.weight,
                 });
+                job.id = grade.jobId;
             }
         }
 
-        return jobs.filter(job => job.grades.length > 0);
+        return Object.values(jobs).filter(job => job.grades.length > 0);
     }
 
-    @OnEvent(ServerEvent.JOBS_USE_WORK_CLOTHES)
+    @Rpc(RpcServerEvent.JOBS_USE_WORK_CLOTHES)
     public async useWorkClothes(source: number, storageId: string) {
-        this.inventoryManager.removeItemFromInventory(storageId, 'work_clothes', 1);
+        return this.inventoryManager.removeItemFromInventory(storageId, 'work_clothes', 1);
     }
 }

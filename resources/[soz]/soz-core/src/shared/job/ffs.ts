@@ -1,3 +1,4 @@
+import { WardrobeConfig } from '../cloth';
 import { NamedZone } from '../polyzone/box.zone';
 
 export type FfsRecipe = {
@@ -181,7 +182,7 @@ const craftZones: NamedZone[] = [
 
 const craftProcesses: Process[] = [
     {
-        label: '👕 Haut en fibre naturelle',
+        label: '👕 Haut en fibres naturelles',
         inputs: [
             {
                 id: FabricMaterial.NATURAL_FIBER,
@@ -194,7 +195,7 @@ const craftProcesses: Process[] = [
         },
     },
     {
-        label: '👕 Haut en fibre artificielle',
+        label: '👕 Haut en fibres artificielles',
         inputs: [
             {
                 id: FabricMaterial.ARTIFICIAL_FIBER,
@@ -250,16 +251,16 @@ const craftProcesses: Process[] = [
         inputs: [
             {
                 id: Garment.TOP,
-                amount: 1,
+                amount: 4,
             },
             {
                 id: Garment.PANT,
-                amount: 1,
+                amount: 4,
             },
         ],
         output: {
             id: 'work_clothes',
-            amount: 1,
+            amount: 4,
         },
     },
 ];
@@ -299,7 +300,7 @@ const luxuryCraftZones: NamedZone[] = [
 
 const luxuryCraftProcesses: Process[] = [
     {
-        label: '👕 Haut luxueux en fibre naturelle',
+        label: '👕 Haut luxueux en fibres naturelles',
         inputs: [
             {
                 id: FabricMaterial.NATURAL_FIBER,
@@ -312,7 +313,7 @@ const luxuryCraftProcesses: Process[] = [
         },
     },
     {
-        label: '👕 Haut luxueux en fibre artificielle',
+        label: '👕 Haut luxueux en fibres artificielles',
         inputs: [
             {
                 id: FabricMaterial.ARTIFICIAL_FIBER,
@@ -454,5 +455,82 @@ export const FfsConfig = {
     restock: {
         duration: 2000,
         getRewardFromDeliveredGarment,
+    },
+};
+
+export const FfsCloakroom: WardrobeConfig = {
+    [GetHashKey('mp_m_freemode_01')]: {
+        ['Tenue Employé']: {
+            Components: {
+                [3]: { Drawable: 4, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 53, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 41, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 20, Texture: 0, Palette: 0 },
+                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 31, Texture: 0, Palette: 0 },
+                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 103, Texture: 0, Palette: 0 },
+            },
+            Props: {},
+        },
+        ['Tenue de Chasse']: {
+            Components: {
+                [3]: { Drawable: 19, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 98, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 86, Texture: 21, Palette: 0 },
+                [6]: { Drawable: 71, Texture: 0, Palette: 0 },
+                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 105, Texture: 0, Palette: 0 },
+                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 247, Texture: 2, Palette: 0 },
+            },
+            Props: {},
+        },
+    },
+    [GetHashKey('mp_f_freemode_01')]: {
+        ['Tenue Employée']: {
+            Components: {
+                [3]: { Drawable: 3, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 55, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 41, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 29, Texture: 2, Palette: 0 },
+                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 38, Texture: 0, Palette: 0 },
+                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 94, Texture: 0, Palette: 0 },
+            },
+            Props: {},
+        },
+        ['Tenue Employée - Talon']: {
+            Components: {
+                [3]: { Drawable: 3, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 55, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 41, Texture: 0, Palette: 0 },
+                [6]: { Drawable: 6, Texture: 0, Palette: 0 },
+                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 38, Texture: 0, Palette: 0 },
+                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 94, Texture: 0, Palette: 0 },
+            },
+            Props: {},
+        },
+        ['Tenue de Chasse']: {
+            Components: {
+                [3]: { Drawable: 20, Texture: 0, Palette: 0 },
+                [4]: { Drawable: 101, Texture: 0, Palette: 0 },
+                [5]: { Drawable: 86, Texture: 21, Palette: 0 },
+                [6]: { Drawable: 74, Texture: 0, Palette: 0 },
+                [7]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [8]: { Drawable: 142, Texture: 0, Palette: 0 },
+                [9]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [10]: { Drawable: 0, Texture: 0, Palette: 0 },
+                [11]: { Drawable: 255, Texture: 2, Palette: 0 },
+            },
+            Props: {},
+        },
     },
 };

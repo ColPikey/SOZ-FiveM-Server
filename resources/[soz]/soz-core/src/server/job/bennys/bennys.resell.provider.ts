@@ -1,9 +1,10 @@
-import { BankService } from '../../../client/bank/bank.service';
 import { OnEvent } from '../../../core/decorators/event';
 import { Inject } from '../../../core/decorators/injectable';
 import { Provider } from '../../../core/decorators/provider';
 import { ServerEvent } from '../../../shared/event';
 import { isErr, isOk } from '../../../shared/result';
+import { VehicleConfiguration } from '../../../shared/vehicle/modification';
+import { BankService } from '../../bank/bank.service';
 import { PrismaService } from '../../database/prisma.service';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
@@ -27,7 +28,7 @@ export class BennysResellProvider {
     private estimationService: EstimationService;
 
     @OnEvent(ServerEvent.BENNYS_SELL_VEHICLE)
-    public async onSellVehicle(source: number, networkId: number, properties: any) {
+    public async onSellVehicle(source: number, networkId: number, configuration: VehicleConfiguration) {
         const entity = NetworkGetEntityFromNetworkId(networkId);
         const hash = GetEntityModel(entity);
         const plate = GetVehicleNumberPlateText(entity).trim();
@@ -58,7 +59,8 @@ export class BennysResellProvider {
             return;
         }
 
-        const result = await this.estimationService.estimateVehicle(source, networkId, properties);
+        const result = await this.estimationService.estimateVehicle(source, networkId, configuration);
+
         if (isErr(result)) {
             this.notifier.notify(source, result.err, 'error');
             return;

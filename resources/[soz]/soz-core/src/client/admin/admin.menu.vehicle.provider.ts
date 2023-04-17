@@ -4,11 +4,12 @@ import { Provider } from '../../core/decorators/provider';
 import { emitRpc } from '../../core/rpc';
 import { NuiEvent, ServerEvent } from '../../shared/event';
 import { Err, Ok } from '../../shared/result';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { groupBy } from '../../shared/utils/array';
 import { Vehicle, VehicleCategory } from '../../shared/vehicle/vehicle';
 import { InputService } from '../nui/input.service';
 import { NuiDispatch } from '../nui/nui.dispatch';
+import { VehicleConditionProvider } from '../vehicle/vehicle.condition.provider';
 import { VehicleModificationService } from '../vehicle/vehicle.modification.service';
 import { VehicleService } from '../vehicle/vehicle.service';
 
@@ -26,9 +27,12 @@ export class AdminMenuVehicleProvider {
     @Inject(VehicleModificationService)
     private vehicleModificationService: VehicleModificationService;
 
+    @Inject(VehicleConditionProvider)
+    private vehicleConditionProvider: VehicleConditionProvider;
+
     @OnNuiEvent(NuiEvent.AdminGetVehicles)
     public async getVehicles() {
-        const vehicles = await emitRpc<any[]>(RpcEvent.ADMIN_GET_VEHICLES);
+        const vehicles = await emitRpc<any[]>(RpcServerEvent.ADMIN_GET_VEHICLES);
 
         let catalog: Record<keyof VehicleCategory, Vehicle[]> = groupBy(vehicles, v => v.category);
 
@@ -161,5 +165,10 @@ export class AdminMenuVehicleProvider {
     @OnNuiEvent(NuiEvent.AdminMenuVehicleDelete)
     public async onAdminMenuVehicleDelete() {
         TriggerServerEvent(ServerEvent.ADMIN_VEHICLE_DELETE);
+    }
+
+    @OnNuiEvent(NuiEvent.AdminToggleNoStall)
+    public async setNoStall(value: boolean): Promise<void> {
+        this.vehicleConditionProvider.setAdminNoStall(value);
     }
 }

@@ -11,7 +11,7 @@ function QBCore.Player.Login(source, citizenid, newData)
         if citizenid then
             local license = QBCore.Functions.GetSozIdentifier(src)
             local PlayerData = exports.oxmysql:singleSync('SELECT * FROM player where citizenid = ?', { citizenid })
-            local apartment = exports.oxmysql:singleSync('SELECT label FROM housing_apartment where ? IN (owner, roommate)', { citizenid })
+            local apartment = exports.oxmysql:singleSync('SELECT id,property_id,label,price,owner,tier,has_parking_place FROM housing_apartment where ? IN (owner, roommate)', { citizenid })
             local role = GetConvar("soz_anonymous_default_role", "user")
             local account = QBCore.Functions.GetUserAccount(src)
 
@@ -31,6 +31,9 @@ function QBCore.Player.Login(source, citizenid, newData)
                 PlayerData.role = role
                 if apartment then
                     PlayerData.address = apartment.label
+                    PlayerData.apartment = apartment
+                else
+                    PlayerData.apartment = nil
                 end
 
                 if PlayerData.gang then
@@ -66,6 +69,10 @@ function QBCore.Player.CheckPlayerData(source, PlayerData)
     PlayerData.money = PlayerData.money or {}
     for moneytype, startamount in pairs(QBCore.Config.Money.MoneyTypes) do
         PlayerData.money[moneytype] = math.floor(PlayerData.money[moneytype] or startamount)
+    end
+    PlayerData.apartment = PlayerData.apartment or nil
+    if PlayerData.apartment then
+        PlayerData.apartment.tier = PlayerData.apartment.tier or 0
     end
     -- Charinfo
     PlayerData.charinfo = PlayerData.charinfo or {}
@@ -151,6 +158,7 @@ function QBCore.Player.CheckPlayerData(source, PlayerData)
         ['fishing'] = false,
         ['rescuer'] = false,
     }
+    PlayerData.metadata['vehiclelimit'] = PlayerData.metadata['vehiclelimit'] or 1
     PlayerData.metadata['inside'] = PlayerData.metadata['inside'] or {
         ['exitCoord'] = false,
         ['apartment'] = false,
@@ -160,9 +168,15 @@ function QBCore.Player.CheckPlayerData(source, PlayerData)
         InstalledApps = {},
     }
 
+    PlayerData.metadata['missive_count'] = PlayerData.metadata['missive_count'] or 0
     PlayerData.metadata['criminal_talents'] = PlayerData.metadata['criminal_talents'] or {}
     PlayerData.metadata['criminal_state'] = PlayerData.metadata['criminal_state'] or 0
     PlayerData.metadata['criminal_reputation'] = PlayerData.metadata['criminal_reputation'] or 0
+
+    PlayerData.metadata['injuries_count'] = PlayerData.metadata['injuries_count'] or 0
+    PlayerData.metadata['injuries_date'] = PlayerData.metadata['injuries_date'] or 0
+
+    PlayerData.metadata['mort'] = PlayerData.metadata['mort'] or ''
 
     if not PlayerData.metadata.lastBidTime then
         PlayerData.metadata.canBid = true
@@ -241,6 +255,8 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
     self.Functions.UpdatePlayerData = function(dontUpdateChat)
         TriggerClientEvent('QBCore:Player:SetPlayerData', self.PlayerData.source, self.PlayerData)
+        TriggerEvent('QBCore:Server:PlayerUpdate', self.PlayerData)
+
         if dontUpdateChat == nil then
             QBCore.Commands.Refresh(self.PlayerData.source)
         end
@@ -248,7 +264,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
     self.Functions.SetFeatures = function(features)
         self.PlayerData.features = features or {}
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.SetJob = function(jobId, gradeId)
@@ -257,7 +273,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
             grade = tostring(gradeId),
             onduty = self.PlayerData.job.onduty or false,
         }
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
 
         TriggerClientEvent('QBCore:Client:OnJobUpdate', self.PlayerData.source, self.PlayerData.job)
         TriggerEvent('QBCore:Server:OnJobUpdate', self.PlayerData.source, self.PlayerData.job)
@@ -294,21 +310,30 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
     self.Functions.SetJobDuty = function(onDuty)
         self.PlayerData.job.onduty = onDuty
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.SetMetaData = function(meta, val)
         local meta = meta:lower()
         if val ~= nil then
             self.PlayerData.metadata[meta] = val
-            self.Functions.UpdatePlayerData()
+            self.Functions.UpdatePlayerData(true)
         end
+    end
+
+    self.Functions.SetMetaDatas = function(metas)
+        for meta, val in pairs(metas) do
+            local meta = meta:lower()
+            self.Functions.SetMetaData(meta, val)
+        end
+
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.AddJobReputation = function(amount)
         local amount = tonumber(amount)
         self.PlayerData.metadata['jobrep'][self.PlayerData.job.id] = self.PlayerData.metadata['jobrep'][self.PlayerData.job.id] + amount
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.AddMoney = function(moneytype, amount, reason)
@@ -320,7 +345,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
         end
         if self.PlayerData.money[moneytype] then
             self.PlayerData.money[moneytype] = self.PlayerData.money[moneytype] + amount
-            self.Functions.UpdatePlayerData()
+            self.Functions.UpdatePlayerData(true)
 
             TriggerClientEvent('hud:client:OnMoneyChange', self.PlayerData.source, moneytype, amount, false)
 
@@ -345,7 +370,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
                 end
             end
             self.PlayerData.money[moneytype] = self.PlayerData.money[moneytype] - amount
-            self.Functions.UpdatePlayerData()
+            self.Functions.UpdatePlayerData(true)
             TriggerClientEvent('hud:client:OnMoneyChange', self.PlayerData.source, moneytype, amount, true)
             if moneytype == 'bank' then
                 TriggerClientEvent('qb-phone:client:RemoveBankMoney', self.PlayerData.source, amount)
@@ -366,7 +391,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
         if self.PlayerData.money[moneytype] then
             self.PlayerData.money[moneytype] = amount
-            self.Functions.UpdatePlayerData()
+            self.Functions.UpdatePlayerData(true)
 
             return true
         end
@@ -422,6 +447,12 @@ function QBCore.Player.CreatePlayer(PlayerData)
         local strengthMultiplier = self.PlayerData.metadata.strength / 100
         local baseWeight = 20000 * strengthMultiplier
 
+        for k, v in pairs(self.PlayerData.metadata["criminal_talents"]) do
+            if v == 20 then
+                baseWeight = baseWeight + 10000
+            end
+        end
+
         if (baseBag == 0 and jobBag == 0) or ((baseBag ~= 0 or jobBag ~= 0) and self.PlayerData.cloth_config.Config.HideBag) then
             exports["soz-inventory"]:SetMaxWeight(self.PlayerData.source, math.floor(baseWeight))
         else
@@ -449,7 +480,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
             SetPedArmour(ped, self.PlayerData.metadata["armor"].current)
         end
 
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.SetClothConfig = function(config, skipApply)
@@ -461,6 +492,9 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
         if not skipApply then
             TriggerClientEvent("soz-character:Client:ApplyCurrentClothConfig", self.PlayerData.source)
+            if Player(self.PlayerData.source).state.isWearingPatientOutfit then
+                Player(self.PlayerData.source).state.isWearingPatientOutfit = false
+            end
         end
 
         exports['soz-monitor']:Log('TRACE', 'Update player cloth config ' .. json.encode(config), { player = self.PlayerData })
@@ -489,7 +523,7 @@ function QBCore.Player.CreatePlayer(PlayerData)
 
     self.Functions.SetCreditCard = function(cardNumber)
         self.PlayerData.charinfo.card = cardNumber
-        self.Functions.UpdatePlayerData()
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.GetCardSlot = function(cardNumber, cardType)
@@ -517,8 +551,33 @@ function QBCore.Player.CreatePlayer(PlayerData)
         local licences = self.PlayerData.metadata.licences
         if licences[licence] ~= nil then
             licences[licence] = tonumber(points)
-            self.Functions.UpdatePlayerData()
+            self.Functions.UpdatePlayerData(true)
         end
+    end
+
+    self.Functions.SetVehicleLimit = function (limit)
+        self.PlayerData.metadata.vehiclelimit = limit
+        self.Functions.UpdatePlayerData(true)
+    end
+
+    self.Functions.SetApartment = function(apartment)
+        if apartment then
+            self.PlayerData.address = apartment.label
+        else
+            self.PlayerData.address = ""
+        end
+        self.PlayerData.apartment = apartment
+        self.Functions.UpdatePlayerData(true)
+    end
+
+    self.Functions.SetApartmentTier = function(tier)
+        self.PlayerData.apartment.tier = tier
+        self.Functions.UpdatePlayerData(true)
+    end
+
+    self.Functions.SetApartmentHasParkingPlace = function(value)
+        self.PlayerData.apartment.has_parking_place = value
+        self.Functions.UpdatePlayerData(true)
     end
 
     self.Functions.Save = function()

@@ -180,7 +180,7 @@ Config.AnimationsList = {
             "Animation d'arrestation",
             false,
             "inv_barriere",
-            {"anim@sports@ballgame@handball@", "ball_rstop_r", 262144, false, false, "ball_get_up"},
+            {event = "soz-core:client:player:animation:takedown"},
         },
         ["SWAT"] = {
             {"Venez !", "Intervention", false, "inv_lspdshield", {"swat", "come", 50}},
@@ -488,7 +488,13 @@ Config.AnimationsList = {
             },
             {"Peur", "DESC", false, false, {"amb@code_human_cower_stand@male@idle_a", "idle_b", 262144, true}},
             {"Nerveux", "DESC", false, false, {"rcmme_tracey1", "nervous_loop", 262144, true}},
-            {"Se rendre", "WASTEDDDDD", false, "inv_pelucheprison", {}},
+            {
+                "Se rendre",
+                "WASTEDDDDD",
+                false,
+                "inv_pelucheprison",
+                {event = "soz-personal-menu:client:animation:surrender"},
+            },
             {"Menotté au sol", "Lachez moiii", false, false, {"random@burial", "b_burial", 262144, true}}, -- INTERACT JOUEUR CUFF ?
         },
         ["Douleur"] = {
@@ -5387,6 +5393,7 @@ Config.WalkStyle = {
     {name = "Menotté", walk = "move_m@prisoner_cuffed"},
     {name = "Pressé", walk = "move_f@hurry@a"},
     {name = "Trottiner", walk = "move_m@quick"},
+    {name = "Accroupi", walk = "move_ped_crouched"},
 }
 
 -- {

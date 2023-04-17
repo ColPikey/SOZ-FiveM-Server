@@ -1,3 +1,6 @@
+import { Rpc } from '@public/core/decorators/rpc';
+import { RpcServerEvent } from '@public/shared/rpc';
+
 import { OnEvent } from '../../core/decorators/event';
 import { Inject } from '../../core/decorators/injectable';
 import { Provider } from '../../core/decorators/provider';
@@ -42,30 +45,37 @@ export class AdminMenuPlayerProvider {
         this.onSetStressLevel(source, player, value === 'min' ? -1000 : 1000);
         this.onSetStrength(source, player, value === 'min' ? -1000 : 1000);
 
+        const targetPlayer = this.playerService.getPlayer(player.id);
+
+        if (!targetPlayer) {
+            return;
+        }
+
         const nutritionValue = value === 'min' ? 0 : 25;
-        this.playerService.setPlayerMetadata(player.id, 'fiber', nutritionValue);
-        this.playerService.setPlayerMetadata(player.id, 'sugar', nutritionValue);
-        this.playerService.setPlayerMetadata(player.id, 'protein', nutritionValue);
-        this.playerService.setPlayerMetadata(player.id, 'lipid', nutritionValue);
-        const newHealthLevel = this.playerService.incrementMetadata(
-            player.id,
+        const newHealthLevel = this.playerService.getIncrementedMetadata(
+            targetPlayer,
             'health_level',
             value === 'min' ? -100 : 100,
             0,
             100
         );
 
-        if (newHealthLevel !== null) {
-            let maxHealth = 200;
+        let maxHealth = 200;
 
-            if (newHealthLevel < 20) {
-                maxHealth = 160;
-            } else if (newHealthLevel < 40) {
-                maxHealth = 180;
-            }
-
-            this.playerService.setPlayerMetadata(player.id, 'max_health', maxHealth);
+        if (newHealthLevel < 20) {
+            maxHealth = 160;
+        } else if (newHealthLevel < 40) {
+            maxHealth = 180;
         }
+
+        this.playerService.setPlayerMetaDatas(player.id, {
+            fiber: nutritionValue,
+            sugar: nutritionValue,
+            protein: nutritionValue,
+            lipid: nutritionValue,
+            max_health: maxHealth,
+            health_level: newHealthLevel,
+        });
     }
 
     @OnEvent(ServerEvent.ADMIN_RESET_SKIN)
@@ -85,5 +95,10 @@ export class AdminMenuPlayerProvider {
             `La progression du joueur ~b~Halloween ${year} (${scenario})~s~ a été réinitialisée.`,
             'info'
         );
+    }
+
+    @Rpc(RpcServerEvent.ADMIN_GET_REPUTATION)
+    public getReputation(source: number, target: number) {
+        return this.playerService.getPlayer(target).metadata.criminal_reputation;
     }
 }

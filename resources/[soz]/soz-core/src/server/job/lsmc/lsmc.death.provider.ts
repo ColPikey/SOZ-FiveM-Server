@@ -4,6 +4,7 @@ import { Provider } from '../../../core/decorators/provider';
 import { ClientEvent, ServerEvent } from '../../../shared/event';
 import { BedLocations } from '../../../shared/job/lsmc';
 import { Monitor } from '../../../shared/monitor';
+import { PlayerMetadata } from '../../../shared/player';
 import { Notifier } from '../../notifier';
 import { PlayerService } from '../../player/player.service';
 
@@ -28,17 +29,33 @@ export class LSMCDeathProvider {
 
         const player = this.playerService.getPlayer(targetid);
         let uniteHUBed = -1;
+
+        const datas = {} as Partial<PlayerMetadata>;
+
         if (uniteHU) {
             uniteHUBed = this.getFreeBed(source);
             Player(targetid).state.isWearingPatientOutfit = true;
+            datas.inside = player.metadata.inside;
+            datas.inside.exitCoord = false;
+            datas.inside.apartment = false;
+            datas.inside.property = null;
         }
+
+        if (player.metadata.mort) {
+            this.notifier.notify(source, player.metadata.mort, 'success', 20000);
+        }
+
         TriggerClientEvent(ClientEvent.LSMC_REVIVE, player.source, skipanim, uniteHU, uniteHUBed);
-        this.playerService.incrementMetadata(targetid, 'hunger', 30, 0, 100);
-        this.playerService.incrementMetadata(targetid, 'thirst', 30, 0, 100);
-        this.playerService.incrementMetadata(targetid, 'alcohol', -50, 0, 100);
-        this.playerService.incrementMetadata(targetid, 'drug', -50, 0, 100);
-        this.playerService.setPlayerMetadata(targetid, 'isdead', false);
-        this.playerService.setPlayerMetadata(targetid, 'mort', '');
+
+        datas.hunger = this.playerService.getIncrementedMetadata(player, 'hunger', 30, 0, 100);
+        datas.thirst = this.playerService.getIncrementedMetadata(player, 'thirst', 30, 0, 100);
+        datas.alcohol = this.playerService.getIncrementedMetadata(player, 'alcohol', -50, 0, 100);
+        datas.drug = this.playerService.getIncrementedMetadata(player, 'drug', -50, 0, 100);
+        datas.isdead = false;
+        datas.mort = '';
+
+        this.playerService.setPlayerMetaDatas(targetid, datas);
+
         Player(targetid).state.isdead = false;
     }
 
@@ -73,13 +90,5 @@ export class LSMCDeathProvider {
         const deathDescription = reason ? reason : '';
         this.playerService.setPlayerMetadata(source, 'mort', deathDescription);
         this.monitor.publish('player_dead', { player_source: source }, { reason: deathDescription });
-    }
-
-    @OnEvent(ServerEvent.LSMC_NOTIF_DEATH_REASON)
-    public notifDeathReason(source: number, target: number) {
-        const targetPlayer = this.playerService.getPlayer(target);
-        if (targetPlayer.metadata.mort) {
-            this.notifier.notify(source, targetPlayer.metadata.mort, 'success', 20000);
-        }
     }
 }

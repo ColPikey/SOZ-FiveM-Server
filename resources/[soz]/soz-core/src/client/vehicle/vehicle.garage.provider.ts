@@ -10,10 +10,11 @@ import { MenuType } from '../../shared/nui/menu';
 import { BoxZone } from '../../shared/polyzone/box.zone';
 import { getDistance, Vector3, Vector4 } from '../../shared/polyzone/vector';
 import { Err, Ok } from '../../shared/result';
-import { RpcEvent } from '../../shared/rpc';
+import { RpcServerEvent } from '../../shared/rpc';
 import { Garage, GarageCategory, GarageType, GarageVehicle } from '../../shared/vehicle/garage';
 import { VehicleClass } from '../../shared/vehicle/vehicle';
 import { BlipFactory } from '../blip';
+import { InventoryManager } from '../inventory/inventory.manager';
 import { Notifier } from '../notifier';
 import { InputService } from '../nui/input.service';
 import { NuiMenu } from '../nui/nui.menu';
@@ -69,6 +70,9 @@ export class VehicleGarageProvider {
 
     @Inject(PlayerService)
     private playerService: PlayerService;
+
+    @Inject(InventoryManager)
+    private inventoryManager: InventoryManager;
 
     @Inject(InputService)
     private inputService: InputService;
@@ -387,7 +391,17 @@ export class VehicleGarageProvider {
     }
 
     @OnNuiEvent(NuiEvent.VehicleGarageTakeOut)
-    public async takeOutVehicle({ id, garage, vehicle }: { id: number; garage: Garage; vehicle: number }) {
+    public async takeOutVehicle({
+        id,
+        garage,
+        vehicle,
+        use_ticket,
+    }: {
+        id: number;
+        garage: Garage;
+        vehicle: number;
+        use_ticket: boolean;
+    }) {
         const garageWithFreePlaces: Garage = { ...garage, parkingPlaces: [] };
 
         for (const parkingPlace of garage.parkingPlaces) {
@@ -416,18 +430,22 @@ export class VehicleGarageProvider {
             return;
         }
 
-        TriggerServerEvent(ServerEvent.VEHICLE_GARAGE_RETRIEVE, id, garageWithFreePlaces, vehicle);
+        TriggerServerEvent(ServerEvent.VEHICLE_GARAGE_RETRIEVE, id, garageWithFreePlaces, vehicle, use_ticket);
 
         this.nuiMenu.closeMenu();
     }
 
     private async enterGarage(id: string, garage: Garage) {
-        const vehicles = await emitRpc<GarageVehicle[]>(RpcEvent.VEHICLE_GARAGE_GET_VEHICLES, id, garage);
+        const vehicles = await emitRpc<GarageVehicle[]>(RpcServerEvent.VEHICLE_GARAGE_GET_VEHICLES, id, garage);
 
         let free_places = null;
+        if (garage.type === GarageType.Private || garage.type === GarageType.House) {
+            free_places = await emitRpc<number>(RpcServerEvent.VEHICLE_GARAGE_GET_FREE_PLACES, id, garage);
+        }
 
-        if (garage.type === GarageType.Private) {
-            free_places = await emitRpc<number>(RpcEvent.VEHICLE_GARAGE_GET_FREE_PLACES, id, garage);
+        let max_places = null;
+        if (garage.type === GarageType.Private || garage.type === GarageType.House) {
+            max_places = await emitRpc<number>(RpcServerEvent.VEHICLE_GARAGE_GET_MAX_PLACES, garage);
         }
 
         const vehicleRenamed = vehicles.map(garageVehicle => {
@@ -445,6 +463,8 @@ export class VehicleGarageProvider {
                 id,
                 garage,
                 free_places,
+                max_places,
+                has_fake_ticket: this.inventoryManager.hasEnoughItem('parking_ticket_fake', 1),
             },
             {
                 position: {

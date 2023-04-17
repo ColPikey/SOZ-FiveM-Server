@@ -10,6 +10,7 @@ import { clsx } from 'clsx';
 import { DndContext, rectIntersection } from '@dnd-kit/core';
 import { useInventoryRow } from '../../../hooks/useInventoryRow';
 import { handleSortInventory } from '../../../hooks/handleSortInventory';
+import { getKeyModifier } from '../../../hooks/getKeyModifier';
 
 export const PlayerContainer = () => {
     const [display, setDisplay] = useState<boolean>(false);
@@ -62,7 +63,7 @@ export const PlayerContainer = () => {
                     event.data.playerInventory.items = event.data.playerInventory.items.filter((i: InventoryItem) => i !== null)
 
                     setPlayerInventory(event.data.playerInventory);
-                    setPlayerMoney(event.data.playerMoney);
+                    setPlayerMoney(event.data.playerMoney || -1);
                     setPlayerShortcuts(event.data.playerShortcuts);
 
                     setDisplay(true);
@@ -86,8 +87,13 @@ export const PlayerContainer = () => {
 
     const handleDragAndDrop = useCallback((event: any) => {
             if (!event.active.data.current) return;
+            const keyEvent = event?.activatorEvent as KeyboardEvent
+
 
             if (event.over !== null) { // Do a sort in inventory
+                if (event.active.id == 'player_drag_money_' || event.over.id == 'player_money' ) {
+                    return;
+                }
                 fetch(`https://soz-inventory/sortItem`, {
                     method: "POST",
                     headers: {
@@ -97,6 +103,7 @@ export const PlayerContainer = () => {
                         item: event.active.data.current.item,
                         slot: event.over.data.current.slot,
                         inventory: playerInventory?.id,
+                        keyModifier: getKeyModifier(keyEvent)
                     }),
                 })
                     .then(res => res.json())
@@ -111,6 +118,13 @@ export const PlayerContainer = () => {
                     .catch((e) => {
                     console.error("Failed to sort item", e);
                 });
+            } else if (event.active.id == 'player_drag_money_') {
+                fetch(`https://soz-inventory/player/giveMoneyToTarget`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json; charset=UTF-8",
+                    },
+                }).then(() => closeMenu());                   
             } else {
                 fetch(`https://soz-inventory/player/giveItemToTarget`, {
                     method: "POST",
